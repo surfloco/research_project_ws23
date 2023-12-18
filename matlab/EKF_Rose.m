@@ -12,7 +12,6 @@ GT.v = in.GT_v';
 t = in.time; Ts = t(2)-t(1);
 aa = in.GT_alpha+sqrt(1e-2)*randn(length(t),1);
 y = [in.Pos_x in.Pos_y]';  
-%y = [in.Pos_x, in.Pos_y, aa];  
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%   V O R A B B E S T I M M U N G   V O N   K0   u n d   H
@@ -26,9 +25,6 @@ K1 = -1/8*(lambda.^2 + 8*lambda - (lambda+4).*sqrt(lambda.^2+8*lambda));
 K2 = .25*(lambda.^2 + 4*lambda - lambda.*sqrt(lambda.^2+8*lambda))/Ts;
 
 K0= [K1;K2]; 
-%Ad = [1 Ts; 0 1]; 
-%C  = [1 0]
-%H = (eye(length(Ad)) - K0*C)*Ad;
 H = [1-K1  Ts-K1*Ts; -K2  1-K2*Ts];
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -41,11 +37,6 @@ Alpha_R = 0.08;        % Smoothing factor measurement noise
 % EKF
 %---------------------------------------------------------------------
 R = Gamma*cov(y(:,1:100)'); 
-
-%Q = [5E-4 0; 0 5E-3;];        % Kovarianz Systemrauschen
-%G = [0 0; 0 0; 0 0; 1 0; 0 1];
-%GQG = G*Q*G';
-%qxy = 2E-5;  qa = 4E-4;  qKr = 3E-4;  qv = 5E-3;
 qxy = 2E-5;  qa = 4E-4;  qKr = 3E-4;  qv = 5E-3;
 GQG = [qxy 0 0 0 0; 0 qxy 0 0 0; 0 0 qa 0 0; 0 0 0 qKr 0; 0 0 0 0 qv];
 
@@ -54,7 +45,6 @@ Cj=[1 0 0 0 0; 0 1 0 0 0];                 % Ausgabematric Kalman-Filter
 % Init: 
 x_dach = [y(1,1);y(2,1);0;0;0];
 P_dach = [.1 0 0 0 0; 0 .1 0 0 0; 0 0 1e-2 0 0; 0 0 0 1e-3 0; 0 0 0 0 1e-2];
-%MM = Cj*P_dach*Cj';
 
 x1 = [y(1,1); 0;];   
 x2 = [y(2,1); 0;];   
@@ -69,31 +59,17 @@ for k=1:length(y)
     
     dy = y(:,k) - Cj*x_dach;
     M = Cj*P_dach*Cj' + R;
-    
-%    Alpha_M = .001;           % Smoothing factor process noise
-%    MM = Alpha_M.*dy*dy' + (1-Alpha_M).*MM;  
-%    M1(k)=MM(1); M2(k)=MM(2); M3(k)=MM(3); M4(k)=MM(4);
-%    M = MM;
        
-    invM = 1/(M(1)*M(4)-M(2)*M(3))*[M(4) -M(2); -M(3) M(1)]; %invM = pinv(M);
+    invM = 1/(M(1)*M(4)-M(2)*M(3))*[M(4) -M(2); -M(3) M(1)];
     K = P_dach*Cj'*invM;     
-%    K = P_dach*Cj'*pinv(M);
     x_tilde = x_dach + K*dy;
-    %P_tilde = (eye(length(x_dach)) - K*Cj)*P_dach;
     P_tilde = (eye(length(x_dach))-K*Cj)*P_dach*(eye(length(x_dach))-K*Cj)' + K*R*K'; 
-        
-%    if x_tilde(5)<0
-%        x_tilde(3) = pi+x_tilde(3);
-%        x_tilde(5) = -x_tilde(5);
-%    end
     
     xP(k)=x_tilde(1); yP(k)=x_tilde(2); alpha(k)=x_tilde(3); Kr(k)=x_tilde(4); v(k)=x_tilde(5); 
 
     x_dach = [
               xP(k) - v(k)*Ts*sin(alpha(k));    
-              yP(k) + v(k)*Ts*cos(alpha(k));    
-%              xP(k) - v(k)*Ts*sin(alpha(k)+.5*v(k)*Ts*Kr(k));    
-%              yP(k) + v(k)*Ts*cos(alpha(k)+.5*v(k)*Ts*Kr(k));    
+              yP(k) + v(k)*Ts*cos(alpha(k));     
               alpha(k) + v(k)*Ts*Kr(k);
               Kr(k);
               v(k)];
@@ -103,16 +79,6 @@ for k=1:length(y)
           0  0          1              v(k)*Ts       Kr(k)*Ts;
           0  0          0                 1              0;
           0  0          0                 0              1];
-      
-%    Aj = [
-%          1,  0,  -v(k)*Ts*cos(alpha(k)+0.5*v(k)*Ts*Kr(k)),  -.5*v(k)^2*Ts^2*cos(alpha(k)+0.5*v(k)*Ts*Kr(k)),  -.5*Kr(k)*v(k)*Ts*cos(alpha(k)+0.5*v(k)*Ts*Kr(k))-Ts*sin(alpha(k)+0.5*v(k)*Ts*Kr(k));
-%          0,  1,  -v(k)*Ts*sin(alpha(k)+0.5*v(k)*Ts*Kr(k)),  -.5*v(k)^2*Ts^2*sin(alpha(k)+0.5*v(k)*Ts*Kr(k)),  -.5*Kr(k)*v(k)*Ts*sin(alpha(k)+0.5*v(k)*Ts*Kr(k))+Ts*cos(alpha(k)+0.5*v(k)*Ts*Kr(k));
-%          0  0          1              v(k)*Ts       Kr(k)*Ts;
-%          0  0          0                 1              0;
-%          0  0          0                 0              1];
-
-      % Gd = Aj*G;
-    % P_dach = Aj*P_tilde*Aj' + Gd*Q*Gd';  
     P_dach = Aj*(P_tilde + GQG)*Aj';  
 end
 
@@ -132,7 +98,6 @@ ROSE_v = v';
 
 
 % Init: 
-%qxy = 2E-4;  qa = 1E-4;  qKr = 1E-4;  qv = 8E-4;
 qxy = 2E-5;  qa = 4E-4;  qKr = 3E-4;  qv = 5E-3;
 GQG = [qxy 0 0 0 0; 0 qxy 0 0 0; 0 0 qa 0 0; 0 0 0 qKr 0; 0 0 0 0 qv];
 R = cov(y(:,1:100)'); 
@@ -142,7 +107,7 @@ P_dach = [.1 0 0 0 0; 0 .1 0 0 0; 0 0 1e-2 0 0; 0 0 0 1e-3 0; 0 0 0 0 1e-2];
 for k=1:length(y)
     dy = y(:,k) - Cj*x_dach;
     M = Cj*P_dach*Cj' + R;
-    invM = 1/(M(1)*M(4)-M(2)*M(3))*[M(4) -M(2); -M(3) M(1)]; %invM = pinv(M);
+    invM = 1/(M(1)*M(4)-M(2)*M(3))*[M(4) -M(2); -M(3) M(1)];
     K = P_dach*Cj'*invM;     
     x_tilde = x_dach + K*dy;
     P_tilde = (eye(length(x_dach))-K*Cj)*P_dach*(eye(length(x_dach))-K*Cj)' + K*R*K'; 
@@ -205,5 +170,3 @@ display(['Verbesserung EKF/ROSE: xy:', num2str(rms_EKF_xy/rms_ROSE_xy),...
 writetable(table(time,Pos_x,Pos_y,GT_x,GT_y,GT_alpha,GT_Kr,GT_v,ROSE_x,...
        ROSE_y,ROSE_alpha,ROSE_Kr,ROSE_v,EKF_x,EKF_y,EKF_alpha,EKF_Kr,EKF_v),...
        'EKF_ROSE.dat','Delimiter','space');
-%mean([rms_EKF_xy, rms_EKF_a, rms_EKF_Kr, rms_EKF_v])
-%===================, ======================================================
